@@ -82,7 +82,8 @@ def validate(root: Path = Path("."), database_url: str | None = None) -> None:
     if {rule["uid"] for rule in rules} != expected:
         raise ValueError("required alert rules are missing")
     heartbeat = next(rule for rule in rules if rule["uid"] == "house-price-inference-heartbeat")
-    if heartbeat["noDataState"] != "Alerting" or heartbeat["for"] != "5m":
+    pending = heartbeat["for"]
+    if heartbeat["noDataState"] != "Alerting" or pending not in {"0m", "1m", "2m", "3m"}:
         raise ValueError("heartbeat No Data must alert within five minutes")
     if database_url:
         validate_database(queries, database_url)

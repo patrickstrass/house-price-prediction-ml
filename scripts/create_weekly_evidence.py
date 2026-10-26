@@ -38,9 +38,16 @@ def main() -> None:
         default="not_run",
     )
     parser.add_argument("--artifact", action="append", type=Path, default=[])
+    parser.add_argument("--azure-result", type=Path)
     parser.add_argument("--output", type=Path, default=Path("weekly-output/weekly-evidence.json"))
     args = parser.parse_args()
-    artifacts = {path.name: checksum(path) for path in args.artifact if path.is_file()}
+    azure_result = {}
+    if args.azure_result and args.azure_result.is_file():
+        azure_result = json.loads(args.azure_result.read_text())
+    paths = [*args.artifact]
+    if args.azure_result:
+        paths.append(args.azure_result)
+    artifacts = {path.name: checksum(path) for path in paths if path.is_file()}
     if not artifacts:
         sentinel = args.output.parent / "no-artifacts.txt"
         sentinel.parent.mkdir(parents=True, exist_ok=True)
@@ -49,10 +56,13 @@ def main() -> None:
     evidence = {
         "schema_version": "1.0.0",
         "workflow_run_id": args.workflow_run_id,
-        "training_run_id": nullable(args.training_run_id),
-        "previous_model_version": nullable(args.previous_model_version),
-        "candidate_model_version": nullable(args.candidate_model_version),
-        "effective_model_version": nullable(args.effective_model_version),
+        "training_run_id": nullable(args.training_run_id) or azure_result.get("training_run_id"),
+        "previous_model_version": nullable(args.previous_model_version)
+        or azure_result.get("previous_model_version"),
+        "candidate_model_version": nullable(args.candidate_model_version)
+        or azure_result.get("candidate_model_version"),
+        "effective_model_version": nullable(args.effective_model_version)
+        or azure_result.get("effective_model_version"),
         "deployment_health": args.deployment_health,
         "rollback_result": args.rollback_result,
         "artifact_checksums": artifacts,

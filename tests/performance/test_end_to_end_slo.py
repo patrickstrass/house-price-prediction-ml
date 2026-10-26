@@ -3,6 +3,7 @@ import shutil
 from time import perf_counter
 
 import pytest
+import yaml
 
 from house_price.data.validation import load_and_validate_snapshot
 
@@ -22,9 +23,15 @@ def test_reference_host_envelope_and_snapshot_validation_slo(dataset_paths) -> N
 
 def test_documented_end_to_end_limits_and_alert_window(project_root) -> None:
     specification = (project_root / "specs/001-train-container-metrics/spec.md").read_text()
-    alerts = (project_root / "grafana/alerts/house-price-alerts.yaml").read_text()
+    alerts = yaml.safe_load(
+        (project_root / "grafana/alerts/house-price-alerts.yaml").read_text()
+    )
     assert "até 10 minutos" in specification
     assert "até 30 minutos" in specification
     assert "até 2 segundos" in specification
-    assert "for: 5m" in alerts
+    group = alerts["groups"][0]
+    interval_seconds = int(group["interval"].removesuffix("m")) * 60
+    for rule in group["rules"]:
+        hold_seconds = int(rule["for"].removesuffix("m")) * 60
+        assert hold_seconds + interval_seconds <= 300
 

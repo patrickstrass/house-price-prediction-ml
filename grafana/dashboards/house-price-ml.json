@@ -43,7 +43,7 @@
       "id": 7,
       "title": "Inference health, volume, errors, p50/p95/p99",
       "type": "timeseries",
-      "targets": [{"refId": "A", "format": "time_series", "rawSql": "SELECT window_started_at AS time, request_count, error_count, latency_p50_ms, latency_p95_ms, latency_p99_ms, heartbeat_age_seconds FROM observability.grafana_inference_operations WHERE $__timeFilter(window_started_at) ORDER BY window_started_at"}]
+      "targets": [{"refId": "A", "format": "time_series", "rawSql": "SELECT window_started_at AS time, model_version, request_count, error_count, latency_p50_ms, latency_p95_ms, latency_p99_ms, heartbeat_age_seconds FROM observability.grafana_inference_operations WHERE $__timeFilter(window_started_at) ORDER BY window_started_at"}]
     },
     {
       "id": 8,

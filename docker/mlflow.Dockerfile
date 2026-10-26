@@ -14,7 +14,8 @@ RUN apt-get update \
     && mkdir -p /mlflow-artifacts && chown mlflow:mlflow /mlflow-artifacts
 COPY --from=builder /opt/venv /opt/venv
 COPY scripts/migrate_mlflow.sh /usr/local/bin/migrate-mlflow
-RUN chmod 0555 /usr/local/bin/migrate-mlflow
+COPY scripts/start_mlflow_azure.sh /usr/local/bin/start-mlflow-azure
+RUN chmod 0555 /usr/local/bin/migrate-mlflow /usr/local/bin/start-mlflow-azure
 USER 10002:10002
 EXPOSE 5000
 VOLUME ["/mlflow-artifacts"]

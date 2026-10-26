@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "prefix": {"value": "hprice-demo"},
+    "location": {"value": "brazilsouth"},
+    "postgresSku": {"value": "Standard_B1ms"},
+    "postgresStorageGiB": {"value": 32},
+    "budgetAmount": {"value": 10},
+    "budgetStartDate": {"value": "2026-10-01T00:00:00Z"},
+    "alertEmail": {"value": "replace@example.com"},
+    "keyVaultName": {"value": "replace-existing-vault"},
+    "githubRepository": {"value": "REPLACE_OWNER/REPLACE_REPOSITORY"},
+    "inferenceImage": {"value": "example.azurecr.io/inference:REPLACE_WITH_APPROVED_TAG"},
+    "mlflowImage": {"value": "example.azurecr.io/mlflow:REPLACE_WITH_APPROVED_TAG"},
+    "trainerImage": {"value": "example.azurecr.io/trainer:REPLACE_WITH_APPROVED_TAG"},
+    "databaseSecretUri": {"value": "https://REPLACE.vault.azure.net/secrets/database-url"},
+    "migrationSecretUri": {"value": "https://REPLACE.vault.azure.net/secrets/migration-url"},
+    "optunaSecretUri": {"value": "https://REPLACE.vault.azure.net/secrets/optuna-url"},
+    "mlflowSecretUri": {"value": "https://REPLACE.vault.azure.net/secrets/mlflow-backend-url"}
+  }
+}

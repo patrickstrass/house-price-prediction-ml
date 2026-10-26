@@ -1,0 +1,4 @@
+artifact_path: model
+flavors:
+  sklearn:
+    pickled_model: model.joblib

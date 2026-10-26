@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://house-price.local/schemas/azure-preflight.schema.json",
+  "title": "Azure Deployment Preflight",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "preflight_id", "checked_at", "subscription_id", "offer_type", "region", "providers", "currency", "credit_remaining", "credit_source", "credit_checked_at", "cost_estimate_30d", "safety_margin", "operational_limit", "price_checked_at", "resource_estimates", "quotas", "assumptions", "feature_002_gate", "status", "reason_codes"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "preflight_id": {"type": "string", "format": "uuid"},
+    "checked_at": {"type": "string", "format": "date-time"},
+    "subscription_id": {"type": "string", "format": "uuid"},
+    "offer_type": {"type": "string", "minLength": 1},
+    "region": {"type": "string", "minLength": 1},
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["namespace", "registration_state", "regional_availability"],
+        "properties": {
+          "namespace": {"type": "string", "minLength": 1},
+          "registration_state": {"type": "string", "minLength": 1},
+          "regional_availability": {"type": "boolean"}
+        }
+      }
+    },
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "credit_remaining": {"type": ["number", "null"], "minimum": 0},
+    "credit_source": {"type": "string", "minLength": 1},
+    "credit_checked_at": {"type": ["string", "null"], "format": "date-time"},
+    "cost_estimate_30d": {"type": "number", "minimum": 0},
+    "safety_margin": {"type": "number", "minimum": 0},
+    "operational_limit": {"type": "number", "minimum": 0},
+    "price_checked_at": {"type": ["string", "null"], "format": "date-time"},
+    "resource_estimates": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["resource_type", "sku", "monthly_estimate", "source"],
+        "properties": {
+          "resource_type": {"type": "string", "minLength": 1},
+          "sku": {"type": "string", "minLength": 1},
+          "monthly_estimate": {"type": "number", "minimum": 0},
+          "source": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "quotas": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "required", "available", "unit"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "required": {"type": "number", "minimum": 0},
+          "available": {"type": "number", "minimum": 0},
+          "unit": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "feature_002_gate": {"enum": ["pending", "passed", "failed"]},
+    "status": {"enum": ["passed", "failed"]},
+    "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "failed"}}}, "then": {"properties": {"reason_codes": {"minItems": 1}}}},
+    {"if": {"properties": {"status": {"const": "passed"}}}, "then": {"properties": {"reason_codes": {"maxItems": 0}, "credit_remaining": {"type": "number"}, "credit_checked_at": {"type": "string"}, "price_checked_at": {"type": "string"}, "providers": {"minItems": 1}, "resource_estimates": {"minItems": 1}, "quotas": {"minItems": 1}}}}
+  ]
+}

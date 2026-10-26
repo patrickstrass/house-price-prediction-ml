@@ -1,0 +1,74 @@
+name: Azure weekly training (prepared, disabled)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: azure-weekly-house-price
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  train:
+    if: ${{ vars.AZURE_DEPLOYMENT_ENABLED == 'true' }}
+    environment: azure-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "0.9.5", enable-cache: true}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: uv sync --frozen --extra dev
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load current approved preflight evidence
+        env:
+          PREFLIGHT_JSON: ${{ vars.AZURE_PREFLIGHT_JSON }}
+          STORAGE_PROBE_JSON: ${{ vars.AZURE_STORAGE_PROBE_JSON }}
+        run: |
+          test -n "$PREFLIGHT_JSON"
+          test -n "$STORAGE_PROBE_JSON"
+          printf '%s' "$PREFLIGHT_JSON" > "$RUNNER_TEMP/azure-preflight.json"
+          printf '%s' "$STORAGE_PROBE_JSON" > "$RUNNER_TEMP/azure-storage-probe.json"
+      - name: Ordered manual jobs and terminal evidence
+        env:
+          AZURE_RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_PREFIX: ${{ vars.AZURE_PREFIX }}
+        run: |
+          uv run python scripts/azure_jobs.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-run-id "$GITHUB_RUN_ID" \
+            --preflight "$RUNNER_TEMP/azure-preflight.json" \
+            --storage-probe "$RUNNER_TEMP/azure-storage-probe.json" \
+            --resource-group "$AZURE_RG" --prefix "$AZURE_PREFIX" \
+            --output "$RUNNER_TEMP/azure-weekly-result.json" --execute
+      - name: Preserve terminal evidence
+        if: always()
+        run: |
+          if ! test -f "$RUNNER_TEMP/azure-weekly-result.json"; then
+            printf '{"status":"failed","reason_code":"preflight_or_job_start_failed"}\n' \
+              > "$RUNNER_TEMP/azure-weekly-result.json"
+          fi
+      - name: Create correlated weekly evidence
+        if: always()
+        run: |
+          uv run python scripts/create_weekly_evidence.py \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --azure-result "$RUNNER_TEMP/azure-weekly-result.json" \
+            --output "$RUNNER_TEMP/azure-weekly-evidence.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: azure-weekly-evidence
+          path: |
+            ${{ runner.temp }}/azure-weekly-result.json
+            ${{ runner.temp }}/azure-weekly-evidence.json
+          if-no-files-found: warn

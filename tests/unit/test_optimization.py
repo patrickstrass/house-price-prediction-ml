@@ -13,7 +13,7 @@ def test_study_name_and_sampler_are_deterministic() -> None:
     assert study.direction.name == "MINIMIZE"
 
 
-def test_linear_study_remains_single_trial() -> None:
+def test_linear_study_explores_all_four_parameter_combinations() -> None:
     rng = np.random.default_rng(42)
     x = pd.DataFrame(rng.normal(size=(80, 8)), columns=FEATURE_NAMES)
     y = pd.Series(rng.normal(size=80))
@@ -26,6 +26,10 @@ def test_linear_study_remains_single_trial() -> None:
         trial_budget=9,
         folds=2,
     )
-    assert len(result.study.trials) == 1
-    assert result.parameters == {}
+    assert len(result.study.trials) == 4
+    assert {
+        (trial.params["fit_intercept"], trial.params["positive"])
+        for trial in result.study.trials
+    } == {(True, False), (True, True), (False, False), (False, True)}
+    assert set(result.parameters) == {"fit_intercept", "positive"}
 

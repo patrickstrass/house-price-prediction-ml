@@ -21,6 +21,8 @@ Thumbs.db
 .idea/
 .vscode/
 model-registry/
+!tests/fixtures/model-registry/
+!tests/fixtures/model-registry/**
 mlruns/
 weekly-output/
 

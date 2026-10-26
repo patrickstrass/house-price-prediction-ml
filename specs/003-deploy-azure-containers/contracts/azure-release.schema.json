@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://house-price.local/schemas/azure-release.schema.json",
+  "title": "Azure Release Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_id", "preflight_id", "storage_probe_id", "git_revision", "ci_run_id", "environment_id", "images", "config_sha256", "model_version", "dataset_sha256", "inference_revision", "health_result", "prediction_result", "rollback_result", "status", "created_at", "completed_at"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "release_id": {"type": "string", "format": "uuid"},
+    "preflight_id": {"type": "string", "format": "uuid"},
+    "storage_probe_id": {"type": "string", "format": "uuid"},
+    "git_revision": {"type": "string", "minLength": 7},
+    "ci_run_id": {"type": "string", "minLength": 1},
+    "environment_id": {"type": "string", "minLength": 1},
+    "images": {
+      "type": "object", "additionalProperties": false,
+      "required": ["trainer", "inference", "mlflow"],
+      "properties": {
+        "trainer": {"$ref": "#/$defs/image"},
+        "inference": {"$ref": "#/$defs/image"},
+        "mlflow": {"$ref": "#/$defs/image"}
+      }
+    },
+    "config_sha256": {"$ref": "#/$defs/sha256"},
+    "model_version": {"type": "string", "minLength": 1},
+    "dataset_sha256": {"$ref": "#/$defs/sha256"},
+    "mlflow_run_id": {"type": ["string", "null"]},
+    "inference_revision": {"type": "string", "minLength": 1},
+    "previous_release_id": {"type": ["string", "null"], "format": "uuid"},
+    "backup_set_id": {"type": ["string", "null"], "format": "uuid"},
+    "health_result": {"enum": ["passed", "failed", "not_run"]},
+    "prediction_result": {"enum": ["passed", "failed", "not_run"]},
+    "rollback_result": {"enum": ["passed", "failed", "not_run", "not_required"]},
+    "status": {"enum": ["prepared", "deployed", "verified", "failed", "rolled_back"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "image": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tag", "digest", "ci_approved"],
+      "properties": {
+        "tag": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "ci_approved": {"const": true}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "verified"}}}, "then": {"properties": {"health_result": {"const": "passed"}, "prediction_result": {"const": "passed"}}}},
+    {"if": {"properties": {"status": {"const": "rolled_back"}}}, "then": {"properties": {"rollback_result": {"const": "passed"}}}}
+  ]
+}

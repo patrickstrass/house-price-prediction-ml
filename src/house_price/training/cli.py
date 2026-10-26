@@ -14,6 +14,7 @@ from house_price.domain import CandidateFamily
 from house_price.logging import configure_logging, log_context
 from house_price.registry.promotion import ConcurrentPromotionError, PromotionError
 from house_price.settings import Settings
+from house_price.training.evaluation import select_winner
 from house_price.training.pipeline import PipelineOptions, run_pipeline
 from house_price.training.publishing import ProjectionError
 
@@ -52,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("invalid split, folds, or timeout")
         settings = Settings()  # type: ignore[call-arg]
     except (ValueError, ValidationError) as exc:
-        print(json.dumps({"event": "configuration_invalid", "error": str(exc)}))
+        print(json.dumps({"event": "configuration_invalid", "reason_code": type(exc).__name__}))
         return 2
     configure_logging(settings.log_level)
     run_id = args.run_id or str(uuid4())
@@ -73,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
             stage="starting",
         ):
             result = run_pipeline(settings, options)
+        winner = select_winner(list(result.candidates))
+        decision = "promoted" if result.promoted else "unchanged" if winner else "rejected"
         print(
             json.dumps(
                 {
@@ -82,22 +85,42 @@ def main(argv: list[str] | None = None) -> int:
                     "promoted": result.promoted,
                     "model_version": result.model_version,
                     "duration_seconds": result.duration_seconds,
+                    "dataset_identity": result.dataset_identity,
+                    "previous_model_version": result.previous_model_version,
+                    "effective_model_version": (
+                        result.model_version or result.previous_model_version
+                    ),
+                    "promotion_decision": decision,
+                    "mlflow_parent_run_id": result.mlflow_parent_run_id,
+                    "winner_family": winner.family.value if winner else None,
+                    "candidate_metrics": [
+                        {
+                            "family": item.family.value,
+                            "mlflow_run_id": item.mlflow_run_id,
+                            "metrics": item.metrics.__dict__,
+                            "parameters": item.parameters,
+                            "artifact_uri": item.artifact_uri,
+                            "eligible": item.eligible,
+                        }
+                        for item in result.candidates
+                    ],
                 },
                 sort_keys=True,
+                default=str,
             )
         )
         return 0
     except DatasetValidationError as exc:
-        print(json.dumps({"event": "dataset_invalid", "error": str(exc)}))
+        print(json.dumps({"event": "dataset_invalid", "reason_code": type(exc).__name__}))
         return 3
     except (ConnectionError, TimeoutError, OperationalError, MlflowException) as exc:
-        print(json.dumps({"event": "dependency_unavailable", "error": str(exc)}))
+        print(json.dumps({"event": "dependency_unavailable", "reason_code": type(exc).__name__}))
         return 4
     except ProjectionError as exc:
-        print(json.dumps({"event": "publication_failed", "error": str(exc)}))
+        print(json.dumps({"event": "publication_failed", "reason_code": type(exc).__name__}))
         return 6
     except PromotionError as exc:
-        print(json.dumps({"event": "promotion_failed", "error": str(exc)}))
+        print(json.dumps({"event": "promotion_failed", "reason_code": type(exc).__name__}))
         return 7
     except ConcurrentPromotionError:
         print(json.dumps({"event": "skipped_concurrent", "training_run_id": run_id}))
@@ -105,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 130
     except Exception as exc:
-        print(json.dumps({"event": "training_failed", "error": str(exc)}))
+        print(json.dumps({"event": "training_failed", "reason_code": type(exc).__name__}))
         return 5
 
 

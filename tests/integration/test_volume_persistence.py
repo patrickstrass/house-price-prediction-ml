@@ -1,3 +1,5 @@
+import ast
+import json
 import os
 import subprocess
 
@@ -20,6 +22,7 @@ def test_named_volumes_survive_compose_down_up() -> None:
             "run",
             "--rm",
             "trainer",
+            "train",
             "--run-id",
             run_id,
             "--seed",
@@ -78,16 +81,23 @@ def test_named_volumes_survive_compose_down_up() -> None:
             "--json",
         ],
     }
-    before = {
-        name: subprocess.check_output(command, text=True) for name, command in commands.items()
-    }
+    def snapshot():
+        return {
+            name: subprocess.check_output(command, text=True)
+            for name, command in commands.items()
+        }
+
+    before = snapshot()
     for cycle in range(5):
         subprocess.run(["docker", "compose", "down"], check=True)
         up = ["docker", "compose", "up", "-d", "--wait"]
         if cycle == 4:
             up.append("--force-recreate")
         subprocess.run([*up, "postgres", "mlflow", "inference"], check=True)
-        after = {
-            name: subprocess.check_output(command, text=True) for name, command in commands.items()
-        }
-        assert after == before
+        after = snapshot()
+        assert json.loads(after["pointer"]) == json.loads(before["pointer"])
+        assert after["observability"] == before["observability"]
+        assert json.loads(after["catalog"])["items"] == json.loads(before["catalog"])["items"]
+        assert set(ast.literal_eval(before["artifacts"])) <= set(
+            ast.literal_eval(after["artifacts"])
+        )

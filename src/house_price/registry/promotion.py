@@ -294,6 +294,17 @@ class PublicationSaga:
                     manifest.mlflow_run_id,
                     {"catalog.publication_state": "approved"},
                 )
+                for previous in self.repository.list_model_entries(connection=connection):
+                    if (
+                        previous.model_version != manifest.model_version
+                        and previous.promotion_status is PromotionStatus.CHAMPION
+                    ):
+                        self.repository.update_model_entry(
+                            previous.model_version,
+                            previous.revision,
+                            {"promotion_status": PromotionStatus.SUPERSEDED},
+                            connection=connection,
+                        )
                 self.repository.update_model_entry(
                     manifest.model_version,
                     entry.revision,

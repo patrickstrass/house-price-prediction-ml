@@ -3,6 +3,12 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      publish_azure:
+        description: Publish approved images to ACR after all CI gates
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,7 +43,7 @@ jobs:
       MLFLOW_BACKEND_STORE_URI: postgresql+psycopg://postgres:ci-postgres-password@postgres:5432/mlflow
       MIGRATION_DATABASE_URL: postgresql+psycopg://migration_user:ci-migration-password@127.0.0.1:5432/house_price
       GRAFANA_DATABASE_URL: postgresql+psycopg://grafana_reader:ci-grafana-password@127.0.0.1:5432/house_price
-      CATALOG_MIGRATION_TEST_DATABASE_URL: postgresql+psycopg://migration_user:ci-migration-password@127.0.0.1:5432/house_price
+      CATALOG_MIGRATION_TEST_DATABASE_URL: postgresql+psycopg://postgres:ci-postgres-password@127.0.0.1:5432/house_price
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -86,6 +92,18 @@ jobs:
       - run: ./scripts/manage_persistent_storage.sh create
       - run: docker compose --env-file .env.example config --quiet
       - run: docker compose --env-file .env.example build --pull trainer inference mlflow
+      - name: Save approved image bytes for optional ACR publication
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_azure && vars.AZURE_DEPLOYMENT_ENABLED == 'true' }}
+        run: |
+          docker save house-price-mlops-trainer house-price-mlops-inference house-price-mlops-mlflow \
+            --output "$RUNNER_TEMP/approved-images.tar"
+      - name: Transfer approved image bytes
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_azure && vars.AZURE_DEPLOYMENT_ENABLED == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: approved-images
+          path: ${{ runner.temp }}/approved-images.tar
+          retention-days: 1
       - if: always()
         run: ./scripts/manage_persistent_storage.sh destroy --confirm destroy
 
@@ -125,4 +143,56 @@ jobs:
         run: |
           docker compose down
           ./scripts/manage_persistent_storage.sh destroy --confirm destroy
+
+  publish-azure:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_azure && vars.AZURE_DEPLOYMENT_ENABLED == 'true' }}
+    needs: [quality, integration, performance, images, docker-persistence]
+    environment: azure-production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "0.9.5", enable-cache: true}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: uv sync --frozen --extra dev
+      - uses: actions/download-artifact@v4
+        with:
+          name: approved-images
+          path: ${{ runner.temp }}
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Push exactly the tested image bytes
+        env:
+          ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+        run: |
+          test -n "$ACR_NAME"
+          docker load --input "$RUNNER_TEMP/approved-images.tar"
+          az acr login --name "$ACR_NAME"
+          tag="sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}"
+          for service in trainer inference mlflow; do
+            docker tag "house-price-mlops-${service}:latest" "$ACR_NAME.azurecr.io/$service:$tag"
+            docker push "$ACR_NAME.azurecr.io/$service:$tag"
+            az acr repository update --name "$ACR_NAME" --image "$service:$tag" \
+              --write-enabled false --delete-enabled false --output none
+          done
+      - name: Record immutable ACR digests
+        env:
+          ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+        run: |
+          uv run python scripts/azure_image_manifest.py --registry "$ACR_NAME" \
+            --tag "sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}" \
+            --git-revision "$GITHUB_SHA" --ci-run-id "$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/azure-image-manifest.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azure-image-manifest
+          path: ${{ runner.temp }}/azure-image-manifest.json
+          retention-days: 90
 

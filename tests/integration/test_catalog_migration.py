@@ -55,11 +55,11 @@ def test_catalog_constraints_append_only_trigger_and_role_permissions() -> None:
             ),
             {"event": uuid.uuid4(), "operation": uuid.uuid4()},
         )
-        with connection.begin_nested():
-            with pytest.raises(DBAPIError, match="append-only"):
+        with pytest.raises(DBAPIError, match="append-only"):
+            with connection.begin_nested():
                 connection.execute(text(f"DELETE FROM {schema}.operation_events"))
-        with connection.begin_nested():
-            with pytest.raises(DBAPIError):
+        with pytest.raises(DBAPIError):
+            with connection.begin_nested():
                 connection.execute(
                     text(
                         f"INSERT INTO {schema}.model_entries "

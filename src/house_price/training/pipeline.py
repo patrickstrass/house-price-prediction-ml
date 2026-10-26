@@ -16,6 +16,7 @@ from house_price.catalog.reconciliation import CatalogReconciler
 from house_price.catalog.repository import CatalogRepository
 from house_price.data.validation import DatasetSnapshot, load_and_validate_snapshot
 from house_price.domain import CandidateFamily, ModelCandidate, ModelMetrics, TrainingStatus
+from house_price.registry.pointer import read_pointer
 from house_price.registry.promotion import (
     ConcurrentPromotionError,
     PromotionError,
@@ -54,6 +55,9 @@ class PipelineResult:
     promoted: bool
     model_version: str | None
     duration_seconds: float
+    dataset_identity: dict[str, str] | None = None
+    previous_model_version: str | None = None
+    mlflow_parent_run_id: str | None = None
 
 
 def _champion_metrics(registry_root: Path) -> ModelMetrics | None:
@@ -112,6 +116,9 @@ def run_pipeline(settings: Settings, options: PipelineOptions) -> PipelineResult
     tracker = TrainingTracker(tracking_client)
     publisher = TrainingPublisher(ObservabilityRepository(engine=engine))
     champion_metrics = _champion_metrics(settings.model_registry_path)
+    previous_pointer = read_pointer(settings.model_registry_path)
+    previous_model_version = previous_pointer.model_version if previous_pointer else None
+    dataset_identity = {"version": snapshot.dataset_version, "sha256": snapshot.sha256}
     candidates: list[ModelCandidate] = []
     fitted: dict[CandidateFamily, object] = {}
     candidate_plots: dict[CandidateFamily, list[Path]] = {}
@@ -220,6 +227,15 @@ def run_pipeline(settings: Settings, options: PipelineOptions) -> PipelineResult
                     publisher.publish_candidate(candidate)
                 winner = select_winner(candidates)
                 if winner is None:
+                    current_pointer = read_pointer(settings.model_registry_path)
+                    tracker.record_selection(
+                        parent_run_id=parent_run_id,
+                        candidates=candidates,
+                        winner=None,
+                        decision="rejected",
+                        effective_model_version=current_pointer.model_version
+                        if current_pointer else None,
+                    )
                     completed = datetime.now(UTC)
                     publisher.publish_run(
                         **{
@@ -235,6 +251,9 @@ def run_pipeline(settings: Settings, options: PipelineOptions) -> PipelineResult
                         False,
                         None,
                         monotonic() - started_clock,
+                        dataset_identity,
+                        previous_model_version,
+                        parent_run_id,
                     )
 
                 stage = TrainingStatus.PROMOTING.value
@@ -256,8 +275,24 @@ def run_pipeline(settings: Settings, options: PipelineOptions) -> PipelineResult
                         catalog_repository,
                     ).publish(package.path, model_uri=winner.artifact_uri)
                 except Exception as exc:
+                    current_pointer = read_pointer(settings.model_registry_path)
+                    tracker.record_selection(
+                        parent_run_id=parent_run_id,
+                        candidates=candidates,
+                        winner=winner,
+                        decision="publication_failed",
+                        effective_model_version=current_pointer.model_version
+                        if current_pointer else None,
+                    )
                     raise PromotionError("candidate publication saga failed") from exc
                 winner.promoted = promoted
+                tracker.record_selection(
+                    parent_run_id=parent_run_id,
+                    candidates=candidates,
+                    winner=winner,
+                    decision="promoted" if promoted else "unchanged",
+                    effective_model_version=model_version,
+                )
                 publisher.publish_candidate(winner)
                 status = (
                     TrainingStatus.SUCCEEDED if promoted else TrainingStatus.SUCCEEDED_NO_PROMOTION
@@ -277,6 +312,9 @@ def run_pipeline(settings: Settings, options: PipelineOptions) -> PipelineResult
                     promoted,
                     model_version,
                     monotonic() - started_clock,
+                    dataset_identity,
+                    previous_model_version,
+                    parent_run_id,
                 )
     except ConcurrentPromotionError:
         LOGGER.warning("concurrent promotion skipped", extra={"stage": stage})

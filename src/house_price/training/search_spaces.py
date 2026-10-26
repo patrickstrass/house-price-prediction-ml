@@ -7,8 +7,10 @@ import optuna
 from house_price.domain import CandidateFamily
 
 SPACE_VERSION = "1.0.0"
+LINEAR_SPACE_VERSION = "2.0.0"
+LINEAR_GRID = {"fit_intercept": [True, False], "positive": [False, True]}
 DEFAULT_TRIAL_BUDGETS = {
-    CandidateFamily.LINEAR: 1,
+    CandidateFamily.LINEAR: 4,
     CandidateFamily.RIDGE: 12,
     CandidateFamily.LASSO: 12,
     CandidateFamily.DECISION_TREE: 16,
@@ -18,7 +20,12 @@ DEFAULT_TRIAL_BUDGETS = {
 
 def suggest_parameters(trial: optuna.Trial, family: CandidateFamily) -> dict[str, Any]:
     if family == CandidateFamily.LINEAR:
-        return {}
+        return {
+            "fit_intercept": trial.suggest_categorical(
+                "fit_intercept", LINEAR_GRID["fit_intercept"]
+            ),
+            "positive": trial.suggest_categorical("positive", LINEAR_GRID["positive"]),
+        }
     if family == CandidateFamily.RIDGE:
         return {"alpha": trial.suggest_float("alpha", 1e-4, 100.0, log=True)}
     if family == CandidateFamily.LASSO:

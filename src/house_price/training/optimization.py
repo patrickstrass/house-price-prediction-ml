@@ -10,7 +10,12 @@ from sklearn.model_selection import cross_val_score
 
 from house_price.domain import CandidateFamily
 from house_price.training.dataset import build_estimator, training_folds
-from house_price.training.search_spaces import SPACE_VERSION, suggest_parameters
+from house_price.training.search_spaces import (
+    LINEAR_GRID,
+    LINEAR_SPACE_VERSION,
+    SPACE_VERSION,
+    suggest_parameters,
+)
 
 
 @dataclass(frozen=True)
@@ -23,7 +28,8 @@ class OptimizationResult:
 
 
 def study_name(training_run_id: str, family: CandidateFamily) -> str:
-    return f"{training_run_id}:{family.value}:{SPACE_VERSION}"
+    version = LINEAR_SPACE_VERSION if family == CandidateFamily.LINEAR else SPACE_VERSION
+    return f"{training_run_id}:{family.value}:{version}"
 
 
 def create_study(
@@ -36,7 +42,9 @@ def create_study(
     return optuna.create_study(
         study_name=study_name(training_run_id, family),
         direction="minimize",
-        sampler=optuna.samplers.TPESampler(seed=seed),
+        sampler=optuna.samplers.GridSampler(LINEAR_GRID)
+        if family == CandidateFamily.LINEAR
+        else optuna.samplers.TPESampler(seed=seed),
         storage=storage_url,
         load_if_exists=True,
     )
@@ -55,7 +63,7 @@ def optimize_family(
     timeout: float | None = None,
 ) -> OptimizationResult:
     if family == CandidateFamily.LINEAR:
-        trial_budget = 1
+        trial_budget = min(trial_budget, 4)
     if trial_budget < 1:
         raise ValueError("trial_budget must be positive")
     study = create_study(training_run_id, family, storage_url=storage_url, seed=seed)

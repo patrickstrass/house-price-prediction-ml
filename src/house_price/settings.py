@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     code_revision: str = Field(default="local-dev", min_length=1)
     log_level: str = "INFO"
     pipeline_password: SecretStr | None = None
+    azure_deployment: bool = False
+
+    @model_validator(mode="after")
+    def require_azure_tls(self) -> "Settings":
+        if self.azure_deployment:
+            for value in (self.database_url, self.optuna_storage_url):
+                if "sslmode=verify-full" not in value:
+                    raise ValueError("Azure PostgreSQL URLs require sslmode=verify-full")
+        return self
 
     @field_validator("database_url", "optuna_storage_url")
     @classmethod

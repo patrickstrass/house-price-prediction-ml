@@ -1,0 +1,69 @@
+{
+  "artifacts": {
+    "metrics_path": "metrics.json",
+    "model_path": "model",
+    "plots": []
+  },
+  "candidate_family": "linear",
+  "dataset": {
+    "name": "california_housing",
+    "row_count": 20640,
+    "schema_version": "1.0.0",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "fixture-dataset-v1"
+  },
+  "dependency_lock_checksum": "f8296453a4cfe83c899ac0eec63846bbb788966d1f474bcc619257089dfea05d",
+  "metrics": {
+    "mae": 0.1,
+    "mse": 0.02,
+    "r2": 0.9,
+    "rmse": 0.1414213562
+  },
+  "mlflow_model_version": "1",
+  "mlflow_run_id": "fixture-mlflow-run",
+  "model_checksum": "621874f50673a1e644d2fec2b5480d787209e01d0b85df1de4c21548a9c54938",
+  "model_version": "fixture-v1",
+  "previous_model_version": null,
+  "promoted_at": "2026-10-24T00:00:00+00:00",
+  "registered_model_name": "house-price-regressor",
+  "schema_version": "1.0.0",
+  "signature": {
+    "inputs": [
+      {
+        "name": "MedInc",
+        "type": "double"
+      },
+      {
+        "name": "HouseAge",
+        "type": "double"
+      },
+      {
+        "name": "AveRooms",
+        "type": "double"
+      },
+      {
+        "name": "AveBedrms",
+        "type": "double"
+      },
+      {
+        "name": "Population",
+        "type": "double"
+      },
+      {
+        "name": "AveOccup",
+        "type": "double"
+      },
+      {
+        "name": "Latitude",
+        "type": "double"
+      },
+      {
+        "name": "Longitude",
+        "type": "double"
+      }
+    ],
+    "output": "double"
+  },
+  "training_environment_version": "fixture-trainer-v1",
+  "training_run_id": "00000000-0000-4000-8000-000000000001"
+}

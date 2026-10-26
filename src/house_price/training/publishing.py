@@ -13,7 +13,7 @@ from uuid import NAMESPACE_URL, uuid5
 import mlflow.sklearn
 
 from house_price.data.validation import DatasetSnapshot
-from house_price.domain import ModelCandidate, TrainingStatus
+from house_price.domain import CandidateFamily, ModelCandidate, TrainingStatus
 from house_price.registry.atomic import sha256_file
 from house_price.registry.pointer import read_pointer
 from house_price.registry.promotion import result_identity
@@ -60,7 +60,16 @@ def build_model_package(
     temporary = Path(tempfile.mkdtemp(prefix="model-", dir=build_root))
     try:
         model_dir = temporary / "model"
-        mlflow.sklearn.save_model(estimator, path=str(model_dir))
+        # This model is fitted from the validated local snapshot. Tree estimators contain
+        # sklearn's internal Tree object, which skops requires us to trust explicitly.
+        trusted_types = (
+            ["sklearn.tree._tree.Tree"]
+            if winner.family in {CandidateFamily.DECISION_TREE, CandidateFamily.RANDOM_FOREST}
+            else None
+        )
+        mlflow.sklearn.save_model(
+            estimator, path=str(model_dir), skops_trusted_types=trusted_types
+        )
         serialized = next(
             (
                 path

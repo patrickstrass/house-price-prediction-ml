@@ -4,10 +4,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import mlflow.pyfunc
 import numpy as np
 import pytest
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
 
+from house_price.catalog.models import PromotionStatus
 from house_price.data.validation import DatasetSnapshot
 from house_price.domain import CandidateFamily, ModelCandidate, ModelMetrics
 from house_price.registry.manifest import PersistedModelManifestV2, validate_package
@@ -26,6 +30,9 @@ class FakeRepository:
 
     def get_model_entry(self, model_version, *, connection=None):
         return self.entries.get(model_version)
+
+    def list_model_entries(self, *, connection=None):
+        return list(self.entries.values())
 
     def upsert_model_entry(self, entry, *, connection=None):
         self.entries[entry.model_version] = entry
@@ -68,8 +75,19 @@ class FakeTracking:
         self.current = version
 
 
-def test_builder_creates_self_contained_v2_package(tmp_path: Path) -> None:
-    estimator = LinearRegression().fit(np.ones((4, 8)), np.arange(4))
+@pytest.mark.parametrize(
+    "family,estimator_class",
+    [
+        (CandidateFamily.LINEAR, LinearRegression),
+        (CandidateFamily.DECISION_TREE, DecisionTreeRegressor),
+        (CandidateFamily.RANDOM_FOREST, RandomForestRegressor),
+    ],
+)
+def test_builder_creates_self_contained_v2_package(
+    tmp_path: Path, family: CandidateFamily, estimator_class
+) -> None:
+    features = np.arange(32, dtype=float).reshape(4, 8)
+    estimator = estimator_class().fit(features, np.arange(4))
     snapshot = DatasetSnapshot(
         dataset_name="california_housing",
         dataset_version="fixture-v1",
@@ -92,7 +110,7 @@ def test_builder_creates_self_contained_v2_package(tmp_path: Path) -> None:
     )
     candidate = ModelCandidate(
         training_run_id="00000000-0000-4000-8000-000000000001",
-        family=CandidateFamily.LINEAR,
+        family=family,
         mlflow_run_id="run-1",
         best_trial_number=0,
         parameters={},
@@ -115,6 +133,8 @@ def test_builder_creates_self_contained_v2_package(tmp_path: Path) -> None:
     manifest = validate_package(result.path, require_directory_identity=True)
     assert isinstance(manifest, PersistedModelManifestV2)
     assert manifest.artifacts.checksums
+    loaded = mlflow.pyfunc.load_model(str(result.path / "model"))
+    assert len(loaded.predict(features[:1])) == 1
 
 
 @pytest.mark.parametrize(
@@ -152,3 +172,24 @@ def test_publication_faults_are_resumable_or_compensated(
     if not pointer_committed:
         assert tracking.current == "previous"
     assert repository.events[-1].result in {"failed", "compensated"}
+
+
+def test_second_publication_supersedes_previous_champion(
+    project_root: Path, tmp_path: Path
+) -> None:
+    root = tmp_path / "registry"
+    root.mkdir()
+    package = tmp_path / "fixture-v1"
+    shutil.copytree(project_root / "tests/fixtures/model-registry/models/fixture-v1", package)
+    repository = FakeRepository()
+    tracking = FakeTracking()
+    saga = PublicationSaga(root, tracking, repository)
+    manifest = validate_package(package)
+    old = saga._entry(manifest, "a" * 64).model_copy(update={
+        "model_version": "previous-v1", "promotion_status": PromotionStatus.CHAMPION,
+    })
+    repository.entries[old.model_version] = old
+    model_version, promoted = saga.publish(package, model_uri="runs:/fixture-mlflow-run/model")
+    assert promoted is True
+    assert repository.entries["previous-v1"].promotion_status is PromotionStatus.SUPERSEDED
+    assert repository.entries[model_version].promotion_status is PromotionStatus.CHAMPION

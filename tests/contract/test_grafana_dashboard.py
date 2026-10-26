@@ -27,6 +27,8 @@ def test_alerts_cover_weekly_inference_quality_and_no_data(project_root: Path) -
         "house-price-quality-gate",
     }
     assert rules["house-price-inference-heartbeat"]["noDataState"] == "Alerting"
-    assert rules["house-price-inference-heartbeat"]["for"] == "5m"
+    pending_minutes = int(rules["house-price-inference-heartbeat"]["for"].removesuffix("m"))
+    interval_minutes = int(alerts["groups"][0]["interval"].removesuffix("m"))
+    assert pending_minutes + interval_minutes <= 5
     validate(project_root)
 

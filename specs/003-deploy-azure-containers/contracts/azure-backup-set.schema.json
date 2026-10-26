@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://house-price.local/schemas/azure-backup-set.schema.json",
+  "title": "Correlated Azure Backup Set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "backup_set_id", "captured_at", "source_release_id", "database_dumps", "artifact_copy", "registry_copy", "model_version", "pointer_sha256", "image_digests", "write_quiesced", "verified_at", "restore_test", "retention_until", "status"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "backup_set_id": {"type": "string", "format": "uuid"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "source_release_id": {"type": ["string", "null"], "format": "uuid"},
+    "database_dumps": {
+      "type": "object", "additionalProperties": false,
+      "required": ["house_price", "mlflow", "optuna"],
+      "properties": {
+        "house_price": {"$ref": "#/$defs/artifact"},
+        "mlflow": {"$ref": "#/$defs/artifact"},
+        "optuna": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "artifact_copy": {"$ref": "#/$defs/artifact"},
+    "registry_copy": {"$ref": "#/$defs/artifact"},
+    "model_version": {"type": ["string", "null"]},
+    "pointer_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "image_digests": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}},
+    "write_quiesced": {"type": "boolean"},
+    "verified_at": {"type": ["string", "null"], "format": "date-time"},
+    "restore_test": {"enum": ["not_run", "passed", "failed"]},
+    "retention_until": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["capturing", "complete", "invalid", "restored"]}
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["uri", "sha256", "size_bytes"],
+      "properties": {
+        "uri": {"type": "string", "minLength": 1, "pattern": "^(?!.*://[^/]*@).+$"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "complete"}}}, "then": {"properties": {"write_quiesced": {"const": true}, "verified_at": {"type": "string", "format": "date-time"}}}},
+    {"if": {"properties": {"status": {"const": "restored"}}}, "then": {"properties": {"restore_test": {"const": "passed"}}}}
+  ]
+}

@@ -39,5 +39,6 @@ def test_alert_state_is_evaluated_each_minute_and_survives_no_data(project_root:
         if rule["uid"] == "house-price-inference-heartbeat"
     )
     assert heartbeat["noDataState"] == "Alerting"
-    assert heartbeat["for"] == "5m"
+    pending_minutes = int(heartbeat["for"].removesuffix("m"))
+    assert pending_minutes + 1 <= 5
 

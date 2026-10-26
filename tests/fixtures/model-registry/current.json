@@ -1,0 +1,7 @@
+{
+  "manifest_path": "models/fixture-v1/manifest.json",
+  "manifest_sha256": "3f47f58b37fd063fe299ff3b2ddb4cdd77f38578bf6edc9806691c4042063292",
+  "model_version": "fixture-v1",
+  "schema_version": "1.0.0",
+  "updated_at": "2026-10-24T00:00:00+00:00"
+}

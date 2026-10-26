@@ -42,6 +42,13 @@ def _not_found(error: MlflowException) -> bool:
     return error.error_code in {"RESOURCE_DOES_NOT_EXIST", "ENDPOINT_NOT_FOUND"}
 
 
+def _alias_not_found(error: MlflowException, alias: str) -> bool:
+    return (
+        error.error_code == "INVALID_PARAMETER_VALUE"
+        and f"registered model alias {alias} not found" in str(error).lower()
+    )
+
+
 class TrackingClient:
     def __init__(
         self,
@@ -256,7 +263,7 @@ class TrackingClient:
                 ).version
             )
         except MlflowException as exc:
-            if _not_found(exc):
+            if _not_found(exc) or _alias_not_found(exc, self.champion_alias):
                 return None
             raise
 
@@ -272,7 +279,7 @@ class TrackingClient:
                     self.registered_model_name, self.champion_alias
                 )
             except MlflowException as exc:
-                if not _not_found(exc):
+                if not (_not_found(exc) or _alias_not_found(exc, self.champion_alias)):
                     raise
         else:
             self.set_champion(version)

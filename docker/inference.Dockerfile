@@ -19,6 +19,7 @@ RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app 
     && chown -R app:app /app /model-registry
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app requirements.lock /app/requirements.lock
+COPY --chown=app:app scripts/azure_storage_evidence.py /usr/local/bin/azure-storage-evidence
 USER 10001:10001
 WORKDIR /app
 EXPOSE 8000

@@ -64,6 +64,10 @@ def test_success_returns_zero_and_json_line(monkeypatch: pytest.MonkeyPatch, cap
         promoted=True,
         model_version="model-v1",
         duration_seconds=1.0,
+        candidates=(),
+        dataset_identity={"version": "fixture", "sha256": "a" * 64},
+        previous_model_version=None,
+        mlflow_parent_run_id="mlflow-parent",
     )
     monkeypatch.setattr(cli, "Settings", lambda: settings)
     monkeypatch.setattr(cli, "run_pipeline", lambda *_args, **_kwargs: result)
